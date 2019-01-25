@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server/server.js",
-    "test": "mocha server/server/**/*.test.js",
+    "test": "export NODE_ENV=test  || SET \"NODE_ENV=test\" && mocha server/**/*.test.js",
     "test-watch": "nodemon --exec 'npm test'"
   },
   "engines": {
@@ -14,12 +14,17 @@
   "author": "Steven Thomason",
   "license": "ISC",
   "dependencies": {
+    "bcryptjs": "^2.3.0",
     "body-parser": "^1.18.3",
+    "crypto-js": "^3.1.6",
     "express": "^4.16.4",
     "handlebars": "^4.0.12",
     "hbs": "^4.0.1",
+    "jsonwebtoken": "^7.1.9",
+    "lodash": "^4.17.11",
     "mongodb": "^3.1.12",
-    "mongoose": "^5.4.5"
+    "mongoose": "^5.4.5",
+    "validator": "^5.6.0"
   },
   "devDependencies": {
     "expect": "^23.6.0",

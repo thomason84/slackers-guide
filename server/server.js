@@ -1,16 +1,25 @@
-var express = require("express");
+require("./config/config");
+
+const _ = require("lodash");
+const express = require("express");
 const hbs = require("hbs");
 const fs = require("fs");
-var bodyParser = require("body-parser");
-var { ObjectID } = require("mongodb");
+const bodyParser = require("body-parser");
+const { ObjectID } = require("mongodb");
 
-var { mongoose } = require("./db/mongoose");
-var { Park } = require("./models/park");
+const { mongoose } = require("./db/mongoose");
+const { Park } = require("./models/park");
+const { User } = require("./models/user");
+const { authenticate } = require("./middleware/authenticate");
 
-var app = express();
-const port = process.env.PORT || 3000;
+const app = express();
+const port = process.env.PORT;
 
-hbs.registerPartials(__dirname + "/views/partials");
+app.use(bodyParser.json());
+
+const path = require("path");
+hbs.registerPartials(path.join(__dirname, "../", "/views/partials"));
+app.use(express.static(path.join(__dirname, "../", "/public")));
 app.set("view engine", "hbs");
 
 app.use((req, res, next) => {
@@ -75,8 +84,6 @@ app.get("/bad", (req, res) => {
   });
 });
 
-app.use(bodyParser.json());
-
 //post to the parks collection
 app.post("/parks", (req, res) => {
   var park = new Park({
@@ -95,11 +102,27 @@ app.post("/parks", (req, res) => {
   );
 });
 
+//get all visited parks
+app.get("/visitedParks", (req, res) => {
+  Park.find({ visited: true }).then(
+    docs => {
+      res.render("parks", {
+        parks: docs
+      });
+    },
+    e => {
+      res.status(400).send(e);
+    }
+  );
+});
+
 //get all parks from the parks collection
-app.get("/parks", (req, res) => {
-  Park.find().then(
-    parks => {
-      res.send({ parks });
+app.get("/allParks", (req, res) => {
+  Park.find({}).then(
+    docs => {
+      res.render("parks", {
+        parks: docs
+      });
     },
     e => {
       res.status(400).send(e);
@@ -116,6 +139,31 @@ app.get("/parks/:id", (req, res) => {
   }
 
   Park.findById(id)
+    .then(parks => {
+      if (!parks) {
+        return res.status(404).send();
+      }
+      res.render("parkDetail", {
+        parks: parks
+      });
+    })
+    .catch(e => {
+      res.status(400).send();
+    });
+});
+
+//delete park by id from parks/id number
+app.delete("/parks/:id", authenticate, (req, res) => {
+  var id = req.params.id;
+
+  if (!ObjectID.isValid(id)) {
+    return res.status(404).send();
+  }
+
+  Park.findOneAndRemove({
+    _id: id,
+    _creator: req.user._id
+  })
     .then(park => {
       if (!park) {
         return res.status(404).send();
@@ -128,15 +176,27 @@ app.get("/parks/:id", (req, res) => {
     });
 });
 
-//delete park by id from parks/id number
-app.delete("/parks/:id", (req, res) => {
+//Patch method to update todos by specified keys only
+app.patch("/parks/:id", authenticate, (req, res) => {
   var id = req.params.id;
+  var body = _.pick(req.body, ["visited", "description", "location"]);
 
   if (!ObjectID.isValid(id)) {
     return res.status(404).send();
   }
 
-  Park.findByIdAndRemove(id)
+  if (_.isBoolean(body.completed) && body.completed) {
+    body.completedAt = new Date().getTime();
+  } else {
+    body.completed = false;
+    body.completedAt = null;
+  }
+
+  Park.findOneAndUpdate(
+    { _id: id, _creator: req.user._id },
+    { $set: body },
+    { new: true }
+  )
     .then(park => {
       if (!park) {
         return res.status(404).send();
@@ -147,6 +207,52 @@ app.delete("/parks/:id", (req, res) => {
     .catch(e => {
       res.status(400).send();
     });
+});
+
+app.post("/users", (req, res) => {
+  var body = _.pick(req.body, ["email", "password"]);
+  var user = new User(body);
+
+  user
+    .save()
+    .then(() => {
+      return user.generateAuthToken();
+    })
+    .then(token => {
+      res.header("x-auth", token).send(user);
+    })
+    .catch(e => {
+      res.status(400).send(e);
+    });
+});
+
+app.get("/users/me", authenticate, (req, res) => {
+  res.send(req.user);
+});
+
+app.post("/users/login", (req, res) => {
+  var body = _.pick(req.body, ["email", "password"]);
+
+  User.findByCredentials(body.email, body.password)
+    .then(user => {
+      return user.generateAuthToken().then(token => {
+        res.header("x-auth", token).send(user);
+      });
+    })
+    .catch(e => {
+      res.status(400).send();
+    });
+});
+
+app.delete("/users/me/token", authenticate, (req, res) => {
+  req.user.removeToken(req.token).then(
+    () => {
+      res.status(200).send();
+    },
+    () => {
+      res.status(400).send();
+    }
+  );
 });
 
 app.listen(port, () => {

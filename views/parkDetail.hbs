@@ -1,0 +1,13 @@
+{{#if parks_id }}<p class='parkId'>{{parks._id}}</p>{{/if}}
+{{#if parks.name }}<p id='name' class='parkName'>{{parks.name}}</p>{{/if}}
+{{#if parks.description}}<p class='parkDescription'>{{parks.description}}</p>{{/if}}
+
+
+<script>
+  var m = document.createElement('meta');
+  var place = document.getElementById('name').innerText;
+  m.name = place;
+  m.title = place;
+  m.content = 'An in depth and dedicated page for ' + place;
+  document.head.appendChild(m);
+</script>
